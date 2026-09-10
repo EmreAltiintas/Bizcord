@@ -1,4 +1,4 @@
-# Bizcord — User Service
+# Bizcord, User Service
 
 The **User Service** owns the *user profiles* bounded context for **Bizcord**, a fictional
 Discord/Slack-like backend built as a microservices system for a university project.
