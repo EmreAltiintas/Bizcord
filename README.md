@@ -9,7 +9,7 @@ It talks to the rest of the system in two ways:
 - **asynchronous messaging** over **RabbitMQ** using **EasyNetQ** (pub/sub between services).
 
 This repository currently contains only the scaffolding. No REST endpoints, message
-contracts, or messaging/handler logic are implemented yet — those come in later tasks.
+contracts, or messaging/handler logic are implemented yet. Those come in later tasks.
 
 ## Project layout
 
