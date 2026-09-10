@@ -1,0 +1,15 @@
+# Local development only — spins up RabbitMQ for the Bizcord User Service.
+# It does NOT run UserService.Api itself (that comes via the Dockerfile in a later task).
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: bizcord-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP — EasyNetQ connects here
+      - "15672:15672"  # Management UI — http://localhost:15672 (guest / guest)
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 30s
+      timeout: 30s
+      retries: 10
