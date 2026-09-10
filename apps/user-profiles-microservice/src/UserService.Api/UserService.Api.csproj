@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UserService.Messages\UserService.Messages.csproj" />
+    <ProjectReference Include="..\UserService.Messaging\UserService.Messaging.csproj" />
   </ItemGroup>
 
 </Project>
