@@ -1,7 +1,7 @@
 using UserService.Domain.Entities;
 using UserService.Messages;
 
-namespace UserService.Api.Mapping;
+namespace UserService.Application.Mapping;
 
 public static class UserProfileMappingExtensions
 {
