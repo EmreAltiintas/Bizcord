@@ -1,8 +1,8 @@
-using UserService.Api.Mapping;
+using UserService.Application.Mapping;
 using UserService.Domain.Entities;
 using UserService.Domain.ValueObjects;
 
-namespace UserService.Api.Tests.Mapping;
+namespace UserService.Application.Tests.Mapping;
 
 public class UserProfileMappingExtensionsTests
 {
