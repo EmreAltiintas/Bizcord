@@ -1,5 +1,4 @@
-# Local development only — spins up RabbitMQ for the Bizcord User Service.
-# It does NOT run UserService.Api itself (that comes via the Dockerfile in a later task).
+# Local development — spins up RabbitMQ and UserService.Api for the Bizcord User Service.
 
 services:
   rabbitmq:
@@ -13,3 +12,15 @@ services:
       interval: 30s
       timeout: 30s
       retries: 10
+
+  user-service:
+    image: bizcord/user-service
+    build:
+      context: ../..
+      dockerfile: apps/user-profiles-microservice/Dockerfile
+    container_name: bizcord-user-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
