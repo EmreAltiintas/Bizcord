@@ -1,22 +1,28 @@
 # Bizcord: Analysis and Design (User Service)
 
-Status: draft. Items marked (assumption) describe services that are not built in this
-repository and must be aligned with the project description and the Domains, Boundaries and
-Interactions workshop.
+Items marked (assumption) describe services that are not built in this repository.
 
 ## 1. System overview
 
-Bizcord is a Discord/Slack-like backend built as a set of microservices. Services communicate
-synchronously over REST and asynchronously over RabbitMQ using EasyNetQ.
+Bizcord is a real-time enterprise communication platform, a Discord-like application where
+users communicate with each other in real time. Only the backend is in scope. The system is
+developed as a monorepo with one microservice per bounded context. This repository contains the
+User Service. Services communicate synchronously over REST and asynchronously over RabbitMQ
+using EasyNetQ.
 
 ## 2. Domains and bounded contexts
 
+The project scope defines four functional domains. Each one maps to a bounded context and a
+microservice.
+
 | Domain | Responsibility | Service |
 |---|---|---|
-| User profiles and presence | Who a user is: display name, avatar, status message, presence, last active | User Service (this service) |
-| Messaging (assumption) | Channels, messages, history. Publishes MessagePostedEvent | Messaging Service |
-| Notifications (assumption) | Mentions and alerts | Notification Service |
-| Search (assumption) | Indexing of message content | Search Service |
+| User profiles | Who a user is: display name, avatar, status message, presence, last active | User Service (this service) |
+| Realtime communication | Sending and receiving messages. Publishes MessagePostedEvent | Messaging Service (assumption) |
+| Channel management | Creating and managing channels | Channel Service (assumption) |
+| Engagement | Notifications, reactions and similar | Engagement Service (assumption) |
+
+The chosen bounded context for this service is user profiles.
 
 ## 3. User Service responsibilities
 
@@ -24,7 +30,7 @@ synchronously over REST and asynchronously over RabbitMQ using EasyNetQ.
 - Own and validate profile data (display name, avatar, status message, presence status).
 - Keep track of when a user was last active, based on messages they post.
 
-The service is not responsible for credentials, chat messages or channel membership.
+The service is not responsible for credentials, chat messages, channels or notifications.
 
 ## 4. Service boundaries and data ownership
 
