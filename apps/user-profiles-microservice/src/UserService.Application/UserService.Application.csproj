@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
@@ -13,6 +13,8 @@
   <ItemGroup>
     <ProjectReference Include="..\UserService.Domain\UserService.Domain.csproj" />
     <ProjectReference Include="..\UserService.Messages\UserService.Messages.csproj" />
+    <ProjectReference Include="..\UserService.Messaging\UserService.Messaging.csproj" />
   </ItemGroup>
 
 </Project>
+

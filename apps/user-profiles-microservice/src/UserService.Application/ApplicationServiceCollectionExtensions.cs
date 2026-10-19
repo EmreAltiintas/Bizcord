@@ -1,5 +1,7 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using UserService.Application.UserProfiles;
+using UserService.Messages;
+using UserService.Messaging;
 
 namespace UserService.Application;
 
@@ -12,6 +14,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IUserProfileRepository, InMemoryUserProfileRepository>();
         services.AddSingleton<IUserProfileService, UserProfileService>();
 
+        services.AddSingleton<IMessageHandler<MessagePostedEvent>, MessagePostedHandler>();
+
         return services;
     }
 }
+
