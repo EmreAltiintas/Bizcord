@@ -1,68 +1,64 @@
 # Bizcord, User Service
 
-The **User Service** owns the *user profiles* bounded context for **Bizcord**, a fictional
-Discord/Slack-like backend built as a microservices system for a university project.
+The User Service owns the user profiles bounded context of Bizcord, a Discord/Slack-like
+backend built as microservices for a university project. See
+[docs/analysis-and-design.md](../../docs/analysis-and-design.md) for the analysis and design.
 
-It talks to the rest of the system in two ways:
+It communicates in two ways:
 
-- a **REST API** (synchronous, request/response), and
-- **asynchronous messaging** over **RabbitMQ** using **EasyNetQ** (pub/sub between services).
+- a REST API (synchronous), and
+- asynchronous messaging over RabbitMQ using EasyNetQ (publish/subscribe).
 
-This repository currently contains only the scaffolding. No REST endpoints, message
-contracts, or messaging/handler logic are implemented yet. Those come in later tasks.
+## Features
+
+- CRUD for user profiles under `/api/user-profiles`.
+- Presence feature: consumes `MessagePostedEvent`, updates the author's last active timestamp
+  and publishes `UserActivityRecordedEvent`.
 
 ## Project layout
 
 ```
-src/UserService.Api        ASP.NET Core Web API (.NET 8) — the HTTP entry point + (later) message handlers
-src/UserService.Messages   Class library — the shared message contracts that travel over RabbitMQ
-tests/UserService.Api.Tests xUnit test project for UserService.Api
-docker-compose.yaml        RabbitMQ for local development
-Dockerfile                 placeholder for containerizing UserService.Api (filled in later)
-UserService.sln            solution referencing all three projects
+src/UserService.Api          ASP.NET Core Web API: controllers and message subscription
+src/UserService.Application  Use cases, repository abstraction, message handler
+src/UserService.Domain       Entities, value objects, domain events
+src/UserService.Messages     Shared message contracts
+src/UserService.Messaging    IMessageClient and IMessageHandler (EasyNetQ implementation)
+tests/                       xUnit tests for each project
+docker-compose.yaml          RabbitMQ and the user service
+Dockerfile                   Multi-stage build of UserService.Api
 ```
-
-**Why the Api / Messages split?** Message contracts are a *shared* concern: other services
-need to reference the exact same class to publish or subscribe to an event. Keeping them in
-a dependency-free class library (`UserService.Messages`) lets them be packaged and shared
-without dragging in the whole web application. `UserService.Api` references
-`UserService.Messages`, not the other way around.
 
 ## Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [Docker](https://docs.docker.com/get-docker/) (for RabbitMQ)
+- .NET 8 SDK
+- Docker
 
-## Run RabbitMQ locally
+## Run with Docker
 
 ```bash
 docker compose up -d
 ```
 
-- AMQP: `localhost:5672`
-- Management UI: <http://localhost:15672> (`guest` / `guest`)
+- API: http://localhost:8080
+- RabbitMQ management UI: http://localhost:15672 (guest / guest)
 
-Stop it with `docker compose down`.
+Stop with `docker compose down`.
 
-## Run the API
+## Run the API locally
 
 ```bash
+docker compose up -d rabbitmq
 dotnet run --project src/UserService.Api
 ```
 
-The API listens on the URLs printed to the console (see
-`src/UserService.Api/Properties/launchSettings.json`). In the `Development` environment a
-Swagger UI is served at `/swagger`.
+In the Development environment Swagger UI is served at `/swagger`. The RabbitMQ connection
+string is read from `ConnectionStrings:RabbitMq` and defaults to `host=localhost`.
 
 ## Run the tests
 
 ```bash
+docker compose up -d rabbitmq
 dotnet test
 ```
 
-## Next tasks
-
-- Define message contracts in `UserService.Messages`.
-- Register the EasyNetQ bus and add publishers / subscribers in `UserService.Api`.
-- Implement the REST endpoints (thin controllers under `src/UserService.Api/Controllers`).
-- Fill in the `Dockerfile` build/run stages.
+The integration test needs a running RabbitMQ.
