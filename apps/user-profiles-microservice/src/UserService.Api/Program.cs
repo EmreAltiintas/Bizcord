@@ -1,3 +1,4 @@
+﻿using UserService.Api;
 using UserService.Application;
 using UserService.Messaging;
 
@@ -18,6 +19,8 @@ builder.Services.AddMessageClient(options =>
     options.ConnectionString =
         builder.Configuration.GetConnectionString("RabbitMq") ?? "host=localhost");
 
+builder.Services.AddHostedService<MessageSubscriptionService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -34,3 +37,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+
+public partial class Program;
+

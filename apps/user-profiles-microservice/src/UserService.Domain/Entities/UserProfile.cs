@@ -1,4 +1,4 @@
-using UserService.Domain.Common;
+﻿using UserService.Domain.Common;
 using UserService.Domain.Events;
 using UserService.Domain.ValueObjects;
 
@@ -15,6 +15,8 @@ public sealed class UserProfile : Entity<UserId>
     public PresenceStatus PresenceStatus { get; private set; }
 
     public DateTimeOffset CreatedAtUtc { get; }
+
+    public DateTimeOffset? LastActiveAtUtc { get; private set; }
 
     private UserProfile(UserId id, DisplayName displayName, DateTimeOffset createdAtUtc)
         : base(id)
@@ -61,7 +63,16 @@ public sealed class UserProfile : Entity<UserId>
         Raise(new PresenceStatusChanged(Id, oldStatus, newStatus, DateTimeOffset.UtcNow));
     }
 
+    public void RecordActivity(DateTimeOffset activeAtUtc)
+    {
+        if (LastActiveAtUtc is null || activeAtUtc > LastActiveAtUtc)
+        {
+            LastActiveAtUtc = activeAtUtc;
+        }
+    }
+
     public void ChangeAvatar(AvatarReference? avatar) => Avatar = avatar;
 
     public void ChangeStatusMessage(StatusMessage statusMessage) => StatusMessage = statusMessage;
 }
+
