@@ -30,6 +30,15 @@ public sealed class UserProfilesController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value);
     }
 
+    // The API gateway validates the JWT and sets X-UserId from its "sub" claim; clients never supply it.
+    [HttpGet("me")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public IActionResult Me([FromHeader(Name = "X-UserId")] string? userId) =>
+        string.IsNullOrWhiteSpace(userId)
+            ? Problem(detail: "Missing X-UserId header.", statusCode: StatusCodes.Status400BadRequest)
+            : Ok(new { userId });
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(UserProfileContract), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
