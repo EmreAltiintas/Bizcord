@@ -24,6 +24,30 @@ public class UserProfileServiceTests
     }
 
     [Fact]
+    public void Create_uses_the_supplied_user_id()
+    {
+        var service = CreateService(out _);
+        var userId = Guid.NewGuid();
+
+        var result = service.Create(new CreateUserProfileCommand("Emre", userId));
+
+        Assert.Equal(userId, result.Value!.Id);
+    }
+
+    [Fact]
+    public void Create_returns_a_conflict_when_the_profile_already_exists()
+    {
+        var service = CreateService(out _);
+        var userId = Guid.NewGuid();
+        service.Create(new CreateUserProfileCommand("Emre", userId));
+
+        var result = service.Create(new CreateUserProfileCommand("Emre again", userId));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ResultErrorType.Conflict, result.ErrorType);
+    }
+
+    [Fact]
     public void Create_returns_a_validation_failure_for_an_invalid_display_name()
     {
         var service = CreateService(out _);

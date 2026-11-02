@@ -5,7 +5,7 @@ namespace UserService.Application.UserProfiles;
 
 public interface IUserProfileRepository
 {
-    void Add(UserProfile profile);
+    bool Add(UserProfile profile);
 
     UserProfile? GetById(UserId id);
 

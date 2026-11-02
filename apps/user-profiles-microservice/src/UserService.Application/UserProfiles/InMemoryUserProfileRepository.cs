@@ -8,7 +8,7 @@ public sealed class InMemoryUserProfileRepository : IUserProfileRepository
 {
     private readonly ConcurrentDictionary<Guid, UserProfile> _profiles = new();
 
-    public void Add(UserProfile profile) => _profiles[profile.Id.Value] = profile;
+    public bool Add(UserProfile profile) => _profiles.TryAdd(profile.Id.Value, profile);
 
     public UserProfile? GetById(UserId id) => _profiles.GetValueOrDefault(id.Value);
 
