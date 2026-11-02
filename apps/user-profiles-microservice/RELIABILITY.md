@@ -83,17 +83,16 @@ Run from `apps/user-profiles-microservice`.
    ```bash
    docker compose stop rabbitmq
    docker compose up -d --build --no-deps user-service
-   curl -i localhost:8080/health/live
-   curl -i localhost:8080/health/ready
-   curl -i localhost:8080/api/user-profiles
+   curl -i localhost:5084/health/live
+   curl -i localhost:5084/health/ready
    docker logs -f bizcord-user-service
    ```
-   Expect: `live` 200, `ready` 503, the profile list 200. Logs repeat `Broker subscription failed (attempt N), retrying in ...` with growing delay.
+   Expect: `live` 200 and `ready` 503. Copy `.env.example` to `.env` first (see `SECURITY.md`). Logs repeat `Broker subscription failed (attempt N), retrying in ...` with growing delay.
 2. Broker comes back
    ```bash
    docker compose up -d rabbitmq
-   curl -i localhost:8080/health/ready
+   curl -i localhost:5084/health/ready
    ```
    Expect: retries stop and `ready` returns 200 within about 30 seconds after the broker is healthy.
 
-Handler retry, dead letter and the publish circuit need a failure inside the handler or the publish call, which cannot be triggered reliably by hand. They are covered by the unit tests above. Manual runs 1 and 2 were executed against the real broker for this task: `ready` returned 503 with the broker stopped and 200 after it restarted, while `live` and the REST API answered throughout.
+Handler retry, dead letter and the publish circuit need a failure inside the handler or the publish call, which cannot be triggered reliably by hand. They are covered by the unit tests above. Manual runs 1 and 2 were executed against the real broker for this task: `ready` returned 503 with the broker stopped and 200 after it restarted, while `live` answered throughout. The REST API also kept answering at that time, before JWT authentication was added.

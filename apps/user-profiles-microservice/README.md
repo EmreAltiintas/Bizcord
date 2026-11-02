@@ -35,11 +35,15 @@ Dockerfile                   Multi-stage build of UserService.Api
 
 ## Run with Docker
 
+The JWT signing key is read from Vault at startup, see `VAULT.md`. Start Vault first
+(`infra/vault`), put the app token in `.env`, then:
+
 ```bash
+cp .env.example .env
 docker compose up -d
 ```
 
-- API: http://localhost:8080
+- API: http://localhost:5084 (all endpoints except `/health/*` need a JWT, see `SECURITY.md`)
 - RabbitMQ management UI: http://localhost:15672 (guest / guest)
 
 Stop with `docker compose down`.
@@ -48,10 +52,12 @@ Stop with `docker compose down`.
 
 ```bash
 docker compose up -d rabbitmq
-dotnet run --project src/UserService.Api
+export VAULT_ADDR=http://localhost:8200
+export VAULT_TOKEN="<app token from infra/vault/.local/app-token.env>"
+dotnet run --project src/UserService.Api --launch-profile http
 ```
 
-In the Development environment Swagger UI is served at `/swagger`. The RabbitMQ connection
+The service refuses to start if it cannot read the signing key from Vault, see `VAULT.md`. In the Development environment Swagger UI is served at `/swagger`. The RabbitMQ connection
 string is read from `ConnectionStrings:RabbitMq` and defaults to `host=localhost`.
 
 ## Run the tests

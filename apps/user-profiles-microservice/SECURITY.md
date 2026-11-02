@@ -39,12 +39,7 @@ Gateway routes live in the gateway clone, not in this repo: `api-gateway/src/Con
 
 ## Configuration
 
-The signing key comes from `Jwt:SigningKey` (environment variable `Jwt__SigningKey`). The service refuses to start without it. `.env.example` holds the local demo key, which equals `AuthenticationProviderKey` in the gateway's `appsettings.Development.json`. Copy it to `.env` for Docker Compose. For `dotnet run`:
-
-```bash
-export Jwt__SigningKey="<value from .env.example>"
-dotnet run --project src/UserService.Api --launch-profile http
-```
+The signing key (`Jwt:SigningKey`) is read from HashiCorp Vault when the service starts. The service refuses to start without it. The value stored in Vault equals `AuthenticationProviderKey` in the gateway's `appsettings.Development.json`. Setup and run instructions are in `VAULT.md`.
 
 Tokens and keys are never logged.
 
@@ -95,4 +90,4 @@ The script requests tokens from the faucet and prints one line per case: no toke
 - The service still publishes port 5084 because the gateway reaches it through the host. Next step: a shared Docker network between the gateway and this service, the route pointing at the service name, and no published port. Until then the service defends itself with its own JWT validation.
 - No issuer or audience validation (see Mechanism).
 - The faucet signs any claims for anyone and the key is a shared demo key. Both are for local use only.
-- Expired tokens are rejected, but there is no token revocation and no key rotation. Vault is Task 02.
+- Expired tokens are rejected, but there is no token revocation and no key rotation. Key storage is covered in `VAULT.md`.
