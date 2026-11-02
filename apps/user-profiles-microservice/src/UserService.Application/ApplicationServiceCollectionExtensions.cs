@@ -14,7 +14,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IUserProfileRepository, InMemoryUserProfileRepository>();
         services.AddSingleton<IUserProfileService, UserProfileService>();
 
-        services.AddSingleton<IMessageHandler<MessagePostedEvent>, MessagePostedHandler>();
+        services.AddRetryingHandler<MessagePostedEvent, MessagePostedHandler>();
 
         return services;
     }

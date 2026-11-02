@@ -11,7 +11,7 @@ namespace UserService.Messaging.Tests;
 public class AddMessageClientTests
 {
     [Fact]
-    public void Registers_IMessageClient_as_singleton_backed_by_EasyNetQMessageClient()
+    public void Registers_IMessageClient_as_singleton_and_EasyNetQMessageClient_as_inner_client()
     {
         var services = new ServiceCollection();
 
@@ -19,7 +19,8 @@ public class AddMessageClientTests
 
         var descriptor = Assert.Single(services, d => d.ServiceType == typeof(IMessageClient));
         Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
-        Assert.Equal(typeof(EasyNetQMessageClient), descriptor.ImplementationType);
+        var inner = Assert.Single(services, d => d.ServiceType == typeof(EasyNetQMessageClient));
+        Assert.Equal(ServiceLifetime.Singleton, inner.Lifetime);
     }
 
     [Fact]
