@@ -1,4 +1,5 @@
-﻿using UserService.Api;
+﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using UserService.Api;
 using UserService.Application;
 using UserService.Messaging;
 
@@ -19,7 +20,14 @@ builder.Services.AddMessageClient(options =>
     options.ConnectionString =
         builder.Configuration.GetConnectionString("RabbitMq") ?? "host=localhost");
 
-builder.Services.AddHostedService<MessageSubscriptionService>();
+builder.Services.Configure<ResilienceOptions>(
+    builder.Configuration.GetSection(ResilienceOptions.SectionName));
+
+builder.Services.AddSingleton<MessageSubscriptionService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MessageSubscriptionService>());
+
+builder.Services.AddHealthChecks()
+    .AddCheck<MessagingHealthCheck>("messaging", tags: new[] { "ready" });
 
 var app = builder.Build();
 
@@ -35,6 +43,8 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
 
 app.Run();
 

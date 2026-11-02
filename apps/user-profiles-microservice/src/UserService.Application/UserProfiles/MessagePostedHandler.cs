@@ -12,6 +12,7 @@ public sealed class MessagePostedHandler : IMessageHandler<MessagePostedEvent>
 {
     private readonly IUserProfileRepository _repository;
     private readonly IMessageClient _messageClient;
+    private readonly ProcessedMessageIds _processed = new();
 
     public MessagePostedHandler(IUserProfileRepository repository, IMessageClient messageClient)
     {
@@ -21,6 +22,11 @@ public sealed class MessagePostedHandler : IMessageHandler<MessagePostedEvent>
 
     public async Task Handle(MessagePostedEvent message, CancellationToken cancellationToken)
     {
+        if (_processed.Contains(message.MessageId))
+        {
+            return;
+        }
+
         var profile = _repository.GetById(new UserId(message.AuthorId));
         if (profile is null)
         {
@@ -40,5 +46,7 @@ public sealed class MessagePostedHandler : IMessageHandler<MessagePostedEvent>
                 ProcessedAt = DateTime.UtcNow
             },
             cancellationToken);
+
+        _processed.Add(message.MessageId);
     }
 }

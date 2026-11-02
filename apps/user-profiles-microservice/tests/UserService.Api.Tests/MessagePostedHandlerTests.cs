@@ -39,6 +39,17 @@ public class MessagePostedHandlerTests
         Assert.Equal(evt.AuthorId, published.UserId);
     }
 
+    [Fact]
+    public async Task Handle_IgnoresRedelivery_OfAlreadyProcessedMessage()
+    {
+        var (handler, client, evt) = Arrange();
+
+        await handler.Handle(evt, CancellationToken.None);
+        await handler.Handle(evt, CancellationToken.None);
+
+        Assert.Single(client.Published);
+    }
+
     // Consumer contract test: the minimum valid MessagePostedEvent must not break the handler
     [Fact]
     public async Task Handler_CanConsume_MinimumValidContract()

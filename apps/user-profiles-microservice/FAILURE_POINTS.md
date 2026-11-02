@@ -1,6 +1,6 @@
 # Failure Points: User Service
 
-Task 01, System Integration. Analysis only, no code changed.
+Task 01, System Integration. Status column updated after Task 02, see `RELIABILITY.md`.
 
 ## Scope and dependency map
 
@@ -17,19 +17,19 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 
 ## Summary
 
-| ID | Title | Severity | Pattern (Task 02) |
-|---|---|---|---|
-| FP-01 | Startup fails or hangs if RabbitMQ is down | High | Retry with backoff, startup in background |
-| FP-02 | Profile update and event publish are not atomic | High | Outbox (other) |
-| FP-03 | All profile data lost on restart | High | Persistent store (other) |
-| FP-04 | Failed consumer messages are not retried and pile up in the error queue | Medium | Retry, dead-letter |
-| FP-05 | Publish has no timeout, no confirm and no fallback | Medium | Timeout, Fallback |
-| FP-06 | No health checks, so orchestration cannot see a broken service | Medium | Health checks (other) |
-| FP-07 | Events for unknown profiles are silently acked and dropped | Medium | Fallback, dead-letter |
-| FP-08 | Redelivery causes duplicate `UserActivityRecordedEvent` | Medium | Idempotent consumer (other) |
-| FP-09 | Consumer concurrency is unbounded and shares threads with publishing | Low | Bulkhead |
-| FP-10 | Silent fallback to `host=localhost` and hardcoded guest credentials | Low | Configuration validation (other) |
-| FP-11 | Read-modify-write on shared mutable entity without locking | Low | Concurrency control (other) |
+| ID | Title | Severity | Pattern (Task 02) | Status |
+|---|---|---|---|---|
+| FP-01 | Startup fails or hangs if RabbitMQ is down | High | Retry with backoff, startup in background | Mitigated |
+| FP-02 | Profile update and event publish are not atomic | High | Outbox (other) | Open |
+| FP-03 | All profile data lost on restart | High | Persistent store (other) | Open |
+| FP-04 | Failed consumer messages are not retried and pile up in the error queue | Medium | Retry, dead-letter | Mitigated |
+| FP-05 | Publish has no timeout, no confirm and no fallback | Medium | Timeout, Fallback | Mitigated |
+| FP-06 | No health checks, so orchestration cannot see a broken service | Medium | Health checks (other) | Mitigated |
+| FP-07 | Events for unknown profiles are silently acked and dropped | Medium | Fallback, dead-letter | Open |
+| FP-08 | Redelivery causes duplicate `UserActivityRecordedEvent` | Medium | Idempotent consumer (other) | Mitigated |
+| FP-09 | Consumer concurrency is unbounded and shares threads with publishing | Low | Bulkhead | Open |
+| FP-10 | Silent fallback to `host=localhost` and hardcoded guest credentials | Low | Configuration validation (other) | Open |
+| FP-11 | Read-modify-write on shared mutable entity without locking | Low | Concurrency control (other) | Open |
 
 ## Details
 
@@ -40,6 +40,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** The whole API, including the REST endpoints that do not need the broker, does not come up. In a container restart after a broker outage, this service can crash-loop or never become ready. The comment at `EasyNetQMessageClient.cs:35-36` says EasyNetQ "retries in the background", but that only covers building the bus, not the subscribe call.
 - **Severity:** High. A dependency outage at startup takes down the entire service, and the REST API is unrelated to the broker.
 - **Pattern:** Retry with exponential backoff and jitter, run subscription setup in a background loop so the host starts regardless. Application/hosting layer (`MessageSubscriptionService`).
+- **Status:** Mitigated
 
 ### FP-02: Profile update and event publish are not atomic
 
@@ -48,6 +49,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** Downstream consumers of `UserActivityRecordedEvent` never learn about the activity. State and events diverge with no way to detect it.
 - **Severity:** High. Silent data inconsistency between this service and others.
 - **Pattern:** Outbox (write event with the state change, publish from a relay), combined with Retry on the relay. Application/infrastructure layer.
+- **Status:** Open
 
 ### FP-03: All profile data lost on restart
 
@@ -56,6 +58,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** Every profile created through `POST /api/user-profiles` disappears, `GET` returns 404, and every later `MessagePostedEvent` is dropped (see FP-07). Running two replicas gives each its own diverging data set.
 - **Severity:** High. Total data loss on the most ordinary operational event. The design doc (`docs/analysis-and-design.md:40`) already lists a database as a later step.
 - **Pattern:** Persistent database behind `IUserProfileRepository`. When added, it brings its own failure points: command timeout, connection pool limits, migrations at startup. Infrastructure layer.
+- **Status:** Open
 
 ### FP-04: Failed consumer messages are not retried and pile up in the error queue
 
@@ -64,6 +67,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** A transient fault turns into a permanently failed message that needs manual requeueing. Nothing monitors or drains the error queue.
 - **Severity:** Medium. Messages are not lost outright, but recovery is manual.
 - **Pattern:** Retry with backoff and jitter inside the handler, then a dead-letter queue with an alert. Messaging layer (`EasyNetQMessageClient`).
+- **Status:** Mitigated
 
 ### FP-05: Publish has no timeout, no confirm and no fallback
 
@@ -72,6 +76,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** A slow or unreachable broker can hold the consumer thread and with it message processing. Whether a publish is lost without error when the broker is down depends on EasyNetQ defaults (see open questions).
 - **Severity:** Medium. Affects an event path, not user-facing REST calls.
 - **Pattern:** Timeout (linked `CancellationTokenSource`), Fallback (log and park the event for later), Circuit Breaker around publish. Messaging layer.
+- **Status:** Mitigated
 
 ### FP-06: No health checks, so orchestration cannot see a broken service
 
@@ -80,6 +85,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** If the broker connection drops after startup, the service still looks healthy and keeps accepting REST calls while its event handling is dead. Other services and the orchestrator cannot tell.
 - **Severity:** Medium. Failures stay invisible until someone notices missing events.
 - **Pattern:** Health checks (readiness covering broker connection), plus restart policy in compose. API/hosting layer.
+- **Status:** Mitigated
 
 ### FP-07: Events for unknown profiles are silently acked and dropped
 
@@ -88,6 +94,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** Combined with FP-03 (restart empties the store) or a race where the first message arrives before the profile is created, activity is permanently lost and no `UserActivityRecordedEvent` is published for that `MessageId`.
 - **Severity:** Medium. Data loss that is invisible in logs.
 - **Pattern:** Fallback (log with MessageId, route to a parking queue or retry briefly), then Retry. Application layer (`MessagePostedHandler`).
+- **Status:** Open
 
 ### FP-08: Redelivery causes duplicate `UserActivityRecordedEvent`
 
@@ -96,6 +103,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** Once retries or manual requeueing from FP-04 exist, downstream consumers see the same `MessageId` more than once. Any non-idempotent consumer double-counts.
 - **Severity:** Medium. Not triggered today without retries, but Task 02 retries will trigger it.
 - **Pattern:** Idempotent consumer (deduplicate on `MessageId`). Application layer. Must be done together with any retry added for FP-04.
+- **Status:** Mitigated
 
 ### FP-09: Consumer concurrency is unbounded and shares threads with publishing
 
@@ -104,6 +112,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** A burst of `MessagePostedEvent` or a slow publish can saturate the consumer and delay all message handling.
 - **Severity:** Low. No evidence of load in this project yet, and the work per message is small.
 - **Pattern:** Bulkhead (explicit prefetch and concurrency limit, optionally separate publish connection). Messaging layer.
+- **Status:** Open
 
 ### FP-10: Silent fallback to `host=localhost` and hardcoded guest credentials
 
@@ -112,6 +121,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** A missing environment variable looks like a broker outage and, combined with FP-01, produces a hard-to-diagnose startup failure. Guest credentials are a security weakness outside local dev.
 - **Severity:** Low. Misconfiguration risk, not a runtime fault.
 - **Pattern:** Fail fast on missing configuration with a clear message, secrets from environment or secret store. Hosting layer.
+- **Status:** Open
 
 ### FP-11: Read-modify-write on shared mutable entity without locking
 
@@ -120,6 +130,7 @@ What this service does not have: no `HttpClient`, no gRPC, no database, no third
 - **Consequence:** Torn updates between profile fields and `LastActiveAtUtc` are possible under concurrent requests.
 - **Severity:** Low. Small window, low-value fields, and the in-memory store will be replaced (FP-03).
 - **Pattern:** Optimistic concurrency (version column) once a database exists. Infrastructure layer.
+- **Status:** Open
 
 ## Top 3 to fix in Task 02
 
