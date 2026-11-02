@@ -66,11 +66,15 @@ Domain events: UserProfileCreated, DisplayNameChanged, PresenceStatusChanged
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/user-profiles` | Create a profile (201, 400) |
-| GET | `/api/user-profiles` | List profiles |
-| GET | `/api/user-profiles/{id}` | Get one profile (200, 404) |
-| PUT | `/api/user-profiles/{id}` | Update name, avatar and presence (200, 400, 404) |
-| DELETE | `/api/user-profiles/{id}` | Delete a profile (204, 404) |
+| POST | `/api/user-profiles` | Create the caller's profile, id taken from the token `sub` (201, 400, 403, 409) |
+| GET | `/api/user-profiles/me` | Identity of the caller (200, 400, 403) |
+| GET | `/api/user-profiles` | List profiles, internal services only (200) |
+| GET | `/api/user-profiles/{id}` | Get one profile, internal services only (200, 404) |
+| PUT | `/api/user-profiles/{id}` | Update the caller's own profile (200, 400, 403, 404) |
+| DELETE | `/api/user-profiles/{id}` | Delete the caller's own profile (204, 403, 404) |
+
+All endpoints except `/health/*` require a JWT. Roles, scopes and the gateway routes are in
+`apps/user-profiles-microservice/SECURITY.md`.
 
 ### Asynchronous: events
 
