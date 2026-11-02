@@ -1,0 +1,19 @@
+services:
+  vault:
+    image: hashicorp/vault:1.21.0
+    container_name: bizcord-vault
+    command: server
+    ports:
+      - "127.0.0.1:8200:8200"
+    volumes:
+      - ./config.hcl:/vault/config/config.hcl:ro
+      - vault-data:/vault/file
+    networks:
+      - bizcord
+
+volumes:
+  vault-data:
+
+networks:
+  bizcord:
+    name: bizcord

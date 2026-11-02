@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using UserService.Api;
+using UserService.Api.Vault;
 using UserService.Application;
 using UserService.Messaging;
 
@@ -10,8 +11,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
+builder.Configuration.AddVaultSecrets();
+
 var signingKey = builder.Configuration["Jwt:SigningKey"]
-    ?? throw new InvalidOperationException("Jwt:SigningKey is required (environment variable Jwt__SigningKey).");
+    ?? throw new InvalidOperationException("Jwt:SigningKey is required.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
