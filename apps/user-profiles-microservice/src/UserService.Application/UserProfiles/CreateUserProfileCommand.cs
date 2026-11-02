@@ -1,3 +1,3 @@
 namespace UserService.Application.UserProfiles;
 
-public sealed record CreateUserProfileCommand(string DisplayName);
+public sealed record CreateUserProfileCommand(string DisplayName, Guid? UserId = null);

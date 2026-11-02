@@ -61,4 +61,17 @@ public class InMemoryUserProfileRepositoryTests
 
         Assert.False(repository.Delete(UserId.New()));
     }
+
+    [Fact]
+    public void Add_returns_false_and_keeps_the_original_when_the_id_already_exists()
+    {
+        var repository = new InMemoryUserProfileRepository();
+        var id = UserId.New();
+        var first = UserProfile.Create(id, DisplayName.Create("Emre"));
+        var second = UserProfile.Create(id, DisplayName.Create("Alex"));
+
+        Assert.True(repository.Add(first));
+        Assert.False(repository.Add(second));
+        Assert.Same(first, repository.GetById(id));
+    }
 }

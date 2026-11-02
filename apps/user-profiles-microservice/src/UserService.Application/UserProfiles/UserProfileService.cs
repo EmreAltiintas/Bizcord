@@ -24,8 +24,12 @@ public sealed class UserProfileService : IUserProfileService
             return Result<UserProfileContract>.ValidationFailure(ex.Message);
         }
 
-        var profile = UserProfile.Create(UserId.New(), displayName);
-        _repository.Add(profile);
+        var id = command.UserId is { } userId ? new UserId(userId) : UserId.New();
+        var profile = UserProfile.Create(id, displayName);
+        if (!_repository.Add(profile))
+        {
+            return Result<UserProfileContract>.Conflict("A profile for this user already exists.");
+        }
 
         return Result<UserProfileContract>.Success(profile.ToContract());
     }

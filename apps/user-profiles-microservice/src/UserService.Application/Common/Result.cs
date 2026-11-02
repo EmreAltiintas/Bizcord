@@ -3,7 +3,8 @@ namespace UserService.Application.Common;
 public enum ResultErrorType
 {
     Validation,
-    NotFound
+    NotFound,
+    Conflict
 }
 
 public sealed class Result<T>
@@ -27,6 +28,8 @@ public sealed class Result<T>
     public static Result<T> Success(T value) => new(true, value, null, null);
 
     public static Result<T> ValidationFailure(string error) => new(false, default, ResultErrorType.Validation, error);
+
+    public static Result<T> Conflict(string error) => new(false, default, ResultErrorType.Conflict, error);
 
     public static Result<T> NotFound(string error = "The requested resource was not found.") =>
         new(false, default, ResultErrorType.NotFound, error);

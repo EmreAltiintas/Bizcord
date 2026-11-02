@@ -20,9 +20,10 @@ services:
       dockerfile: apps/user-profiles-microservice/Dockerfile
     container_name: bizcord-user-service
     ports:
-      - "8080:8080"
+      - "5084:8080"
     environment:
       ConnectionStrings__RabbitMq: "host=rabbitmq;username=guest;password=guest"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-}
     depends_on:
       rabbitmq:
         condition: service_healthy
