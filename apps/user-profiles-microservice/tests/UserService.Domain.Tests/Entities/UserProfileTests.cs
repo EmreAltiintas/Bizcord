@@ -100,6 +100,78 @@ public class UserProfileTests
     }
 
     [Fact]
+    public void Ban_marks_the_profile_and_raises_a_UserBanned_event()
+    {
+        var profile = UserProfile.Create(UserId.New(), Emre);
+        profile.ClearDomainEvents();
+
+        profile.Ban("spam");
+
+        Assert.True(profile.IsBanned);
+        Assert.Equal("spam", profile.BanReason);
+        Assert.NotNull(profile.BannedAtUtc);
+        var banned = Assert.IsType<UserBanned>(Assert.Single(profile.DomainEvents));
+        Assert.Equal(profile.Id, banned.UserId);
+        Assert.Equal("spam", banned.Reason);
+    }
+
+    [Fact]
+    public void Ban_is_idempotent_and_keeps_the_first_reason_and_timestamp()
+    {
+        var profile = UserProfile.Create(UserId.New(), Emre);
+        profile.Ban("spam");
+        var bannedAt = profile.BannedAtUtc;
+        profile.ClearDomainEvents();
+
+        profile.Ban("harassment");
+
+        Assert.True(profile.IsBanned);
+        Assert.Equal("spam", profile.BanReason);
+        Assert.Equal(bannedAt, profile.BannedAtUtc);
+        Assert.Empty(profile.DomainEvents);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Ban_requires_a_reason(string? reason)
+    {
+        var profile = UserProfile.Create(UserId.New(), Emre);
+
+        Assert.ThrowsAny<ArgumentException>(() => profile.Ban(reason!));
+        Assert.False(profile.IsBanned);
+    }
+
+    [Fact]
+    public void Unban_clears_the_ban_and_raises_a_UserUnbanned_event()
+    {
+        var profile = UserProfile.Create(UserId.New(), Emre);
+        profile.Ban("spam");
+        profile.ClearDomainEvents();
+
+        profile.Unban();
+
+        Assert.False(profile.IsBanned);
+        Assert.Null(profile.BanReason);
+        Assert.Null(profile.BannedAtUtc);
+        var unbanned = Assert.IsType<UserUnbanned>(Assert.Single(profile.DomainEvents));
+        Assert.Equal(profile.Id, unbanned.UserId);
+    }
+
+    [Fact]
+    public void Unban_is_idempotent()
+    {
+        var profile = UserProfile.Create(UserId.New(), Emre);
+        profile.ClearDomainEvents();
+
+        profile.Unban();
+
+        Assert.False(profile.IsBanned);
+        Assert.Empty(profile.DomainEvents);
+    }
+
+    [Fact]
     public void ClearDomainEvents_empties_the_collection()
     {
         var profile = UserProfile.Create(UserId.New(), Emre);

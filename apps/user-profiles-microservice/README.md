@@ -15,6 +15,8 @@ It communicates in two ways:
 - Presence feature: consumes `MessagePostedEvent`, updates the author's last active timestamp
   and publishes `UserActivityRecordedEvent`.
 
+- Ban saga: a moderator bans a user, and the User Service orchestrates removal from channels and ending of calls in other services. See [SAGA.md](SAGA.md).
+
 ## Project layout
 
 ```
@@ -23,8 +25,9 @@ src/UserService.Application  Use cases, repository abstraction, message handler
 src/UserService.Domain       Entities, value objects, domain events
 src/UserService.Messages     Shared message contracts
 src/UserService.Messaging    IMessageClient and IMessageHandler (EasyNetQ implementation)
+src/SagaStubs.Worker         Stand-ins for the Channel and Streaming services (ban saga)
 tests/                       xUnit tests for each project
-docker-compose.yaml          RabbitMQ and the user service
+docker-compose.yaml          RabbitMQ, the user service and the two saga stubs
 Dockerfile                   Multi-stage build of UserService.Api
 ```
 

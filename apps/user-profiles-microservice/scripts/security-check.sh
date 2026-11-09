@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks east/west security through the gateway (8080) and directly against the service (5084).
 # Needs: gateway running (docker compose up --build in api-gateway), the service running with
-# the same Jwt__SigningKey as the gateway, and a clean in-memory store (restart the service).
+# the same signing key as the gateway (read from Vault, see VAULT.md), and a clean in-memory store (restart the service).
 set -u
 
 GATEWAY=${GATEWAY:-http://localhost:8080}

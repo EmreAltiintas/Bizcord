@@ -18,6 +18,12 @@ public sealed class UserProfile : Entity<UserId>
 
     public DateTimeOffset? LastActiveAtUtc { get; private set; }
 
+    public bool IsBanned { get; private set; }
+
+    public string? BanReason { get; private set; }
+
+    public DateTimeOffset? BannedAtUtc { get; private set; }
+
     private UserProfile(UserId id, DisplayName displayName, DateTimeOffset createdAtUtc)
         : base(id)
     {
@@ -69,6 +75,39 @@ public sealed class UserProfile : Entity<UserId>
         {
             LastActiveAtUtc = activeAtUtc;
         }
+    }
+
+    /// <summary>Marks the profile as banned. Does nothing if the profile is already banned.</summary>
+    public void Ban(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        if (IsBanned)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        IsBanned = true;
+        BanReason = reason;
+        BannedAtUtc = now;
+
+        Raise(new UserBanned(Id, reason, now));
+    }
+
+    /// <summary>Removes the ban. Does nothing if the profile is not banned.</summary>
+    public void Unban()
+    {
+        if (!IsBanned)
+        {
+            return;
+        }
+
+        IsBanned = false;
+        BanReason = null;
+        BannedAtUtc = null;
+
+        Raise(new UserUnbanned(Id, DateTimeOffset.UtcNow));
     }
 
     public void ChangeAvatar(AvatarReference? avatar) => Avatar = avatar;
