@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using UserService.Api;
+using UserService.Api.Sagas;
 using UserService.Api.Vault;
 using UserService.Application;
+using UserService.Application.Sagas.Ban;
 using UserService.Messaging;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -35,6 +37,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization(AuthorizationPolicies.Register);
 
 builder.Services.AddControllers();
+builder.Services.AddSingleton(
+    builder.Configuration.GetSection(BanSagaOptions.SectionName).Get<BanSagaOptions>() ?? new BanSagaOptions());
 builder.Services.AddApplication();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -52,6 +56,8 @@ builder.Services.Configure<ResilienceOptions>(
 
 builder.Services.AddSingleton<MessageSubscriptionService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MessageSubscriptionService>());
+
+builder.Services.AddHostedService<BanSagaSubscriptionService>();
 
 builder.Services.AddHealthChecks()
     .AddCheck<MessagingHealthCheck>("messaging", tags: new[] { "ready" });

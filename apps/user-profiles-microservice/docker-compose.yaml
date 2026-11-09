@@ -32,6 +32,37 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  # Stand-ins for the Channel and Streaming services of other teams. Set the fail variables
+  # to make the first N attempts per saga fail (0 never fails, 99 always fails), e.g.
+  #   CHANNEL_FAIL_FIRST_ATTEMPTS=2 STREAMING_FAIL_FIRST_ATTEMPTS=0 docker compose up -d
+  channel-stub:
+    image: bizcord/saga-stubs
+    build:
+      context: ../..
+      dockerfile: apps/user-profiles-microservice/src/SagaStubs.Worker/Dockerfile
+    container_name: bizcord-channel-stub
+    environment:
+      ConnectionStrings__RabbitMq: "host=rabbitmq;username=guest;password=guest"
+      Stub__Role: channel
+      Stub__FailFirstAttempts: ${CHANNEL_FAIL_FIRST_ATTEMPTS:-0}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  streaming-stub:
+    image: bizcord/saga-stubs
+    build:
+      context: ../..
+      dockerfile: apps/user-profiles-microservice/src/SagaStubs.Worker/Dockerfile
+    container_name: bizcord-streaming-stub
+    environment:
+      ConnectionStrings__RabbitMq: "host=rabbitmq;username=guest;password=guest"
+      Stub__Role: streaming
+      Stub__FailFirstAttempts: ${STREAMING_FAIL_FIRST_ATTEMPTS:-0}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 networks:
   bizcord:
     external: true
