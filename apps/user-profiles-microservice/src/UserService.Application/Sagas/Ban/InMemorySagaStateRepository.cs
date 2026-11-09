@@ -17,6 +17,12 @@ public sealed class InMemorySagaStateRepository : ISagaStateRepository
     public Task<BanSagaState?> GetById(Guid sagaId) =>
         Task.FromResult(_states.GetValueOrDefault(sagaId));
 
+    public Task<BanSagaState?> GetLatestByUserId(Guid userId) =>
+        Task.FromResult(_states.Values
+            .Where(state => state.UserId == userId && state.UserBanned)
+            .OrderByDescending(state => state.StartedAt)
+            .FirstOrDefault());
+
     public Task Save(BanSagaState state)
     {
         ArgumentNullException.ThrowIfNull(state);

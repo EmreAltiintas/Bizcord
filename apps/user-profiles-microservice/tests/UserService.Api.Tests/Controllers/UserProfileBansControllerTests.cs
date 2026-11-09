@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using UserService.Api.Tests.Security;
+using UserService.Application.Sagas.Ban;
 using UserService.Messages.Bans;
 using UserService.Messaging;
 
@@ -104,6 +105,24 @@ public class UserProfileBansControllerTests : IClassFixture<UserProfileBansContr
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         var command = _factory.Client.Published.OfType<UnbanUserCommand>().Single(c => c.UserId == userId);
         Assert.Equal(_moderatorId, command.ModeratorId);
+    }
+
+    [Fact]
+    public async Task Unban_returns_409_while_a_ban_saga_is_running()
+    {
+        var userId = Guid.NewGuid();
+        await _factory.Services.GetRequiredService<ISagaStateRepository>().Save(new BanSagaState
+        {
+            SagaId = Guid.NewGuid(),
+            UserId = userId,
+            UserBanned = true,
+            StartedAt = DateTimeOffset.UtcNow
+        });
+
+        var response = await _http.SendAsync(Request(HttpMethod.Post, $"/api/user-profiles/{userId}/unban"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.DoesNotContain(_factory.Client.Published.OfType<UnbanUserCommand>(), c => c.UserId == userId);
     }
 
     [Fact]

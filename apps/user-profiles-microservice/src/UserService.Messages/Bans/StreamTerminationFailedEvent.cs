@@ -7,5 +7,8 @@ public sealed class StreamTerminationFailedEvent
 
     public Guid UserId { get; init; }
 
+    /// <summary>The attempt number of the command that failed. A redelivered event for an old attempt is ignored.</summary>
+    public int Attempt { get; init; }
+
     public string Reason { get; init; } = string.Empty;
 }

@@ -53,7 +53,6 @@ public class BanSagaOrchestratorTests
                 Profiles,
                 States,
                 Client,
-                new BanSagaOptions { MaxStepAttempts = 3, BackoffBaseDelay = TimeSpan.FromSeconds(1) },
                 NullLogger<BanSagaOrchestrator>.Instance,
                 (delay, _) =>
                 {
@@ -74,16 +73,31 @@ public class BanSagaOrchestratorTests
         public Task ChannelsRemoved(Guid sagaId) =>
             Orchestrator.Handle(new UserRemovedFromChannelsEvent { SagaId = sagaId, UserId = ProfileId }, CancellationToken.None);
 
-        public Task ChannelRemovalFailed(Guid sagaId) =>
-            Orchestrator.Handle(
-                new ChannelRemovalFailedEvent { SagaId = sagaId, UserId = ProfileId, Reason = "down" }, CancellationToken.None);
+        // Fails the attempt the saga is currently waiting for, unless a specific attempt is given.
+        public async Task ChannelRemovalFailed(Guid sagaId, int? attempt = null) =>
+            await Orchestrator.Handle(
+                new ChannelRemovalFailedEvent
+                {
+                    SagaId = sagaId,
+                    UserId = ProfileId,
+                    Attempt = attempt ?? (await State(sagaId)).ChannelAttempts,
+                    Reason = "down"
+                },
+                CancellationToken.None);
 
         public Task StreamsTerminated(Guid sagaId) =>
             Orchestrator.Handle(new UserStreamsTerminatedEvent { SagaId = sagaId, UserId = ProfileId }, CancellationToken.None);
 
-        public Task StreamTerminationFailed(Guid sagaId) =>
-            Orchestrator.Handle(
-                new StreamTerminationFailedEvent { SagaId = sagaId, UserId = ProfileId, Reason = "down" }, CancellationToken.None);
+        public async Task StreamTerminationFailed(Guid sagaId, int? attempt = null) =>
+            await Orchestrator.Handle(
+                new StreamTerminationFailedEvent
+                {
+                    SagaId = sagaId,
+                    UserId = ProfileId,
+                    Attempt = attempt ?? (await State(sagaId)).StreamAttempts,
+                    Reason = "down"
+                },
+                CancellationToken.None);
 
         public async Task<BanSagaState> State(Guid sagaId) =>
             (await States.GetById(sagaId))!;
@@ -125,6 +139,8 @@ public class BanSagaOrchestratorTests
         var terminate = f.Client.Published.OfType<TerminateUserStreamsCommand>().Single();
         Assert.Equal((sagaId, f.ProfileId), (remove.SagaId, remove.UserId));
         Assert.Equal((sagaId, f.ProfileId), (terminate.SagaId, terminate.UserId));
+        Assert.Equal(1, remove.Attempt);
+        Assert.Equal(1, terminate.Attempt);
     }
 
     [Fact]
@@ -290,15 +306,114 @@ public class BanSagaOrchestratorTests
         var unbanned = f.Client.Published.OfType<UserUnbannedEvent>().Single();
         var restore = f.Client.Published.OfType<RestoreChannelMembershipCommand>().Single();
         Assert.Equal((unban.SagaId, f.ProfileId), (unbanned.SagaId, unbanned.UserId));
-        Assert.Equal((unban.SagaId, f.ProfileId), (restore.SagaId, restore.UserId));
+        Assert.Equal((banSaga, f.ProfileId), (restore.SagaId, restore.UserId));
         Assert.Equal(0, f.Client.Count<TerminateUserStreamsCommand>());
+    }
+
+    [Fact]
+    public async Task Unban_is_rejected_while_the_ban_saga_is_running()
+    {
+        var f = new Fixture();
+        await f.StartBan();
+        f.Client.Published.Clear();
+
+        await f.Orchestrator.Handle(
+            new UnbanUserCommand { UserId = f.ProfileId, ModeratorId = Guid.NewGuid() }, CancellationToken.None);
+
+        Assert.True(f.Profile.IsBanned);
+        Assert.Empty(f.Client.Published);
+    }
+
+    [Fact]
+    public async Task Ban_of_an_already_banned_user_fails_the_saga_without_new_commands()
+    {
+        var f = new Fixture();
+        var first = await f.StartBan();
+        await f.ChannelsRemoved(first);
+        await f.StreamsTerminated(first);
+        f.Client.Published.Clear();
+
+        var second = await f.StartBan();
+
+        Assert.True((await f.State(second)).IsFailed);
+        Assert.Equal(1, f.Client.Count<UserBanFailedEvent>());
+        Assert.Equal(0, f.Client.Count<RemoveUserFromChannelsCommand>());
+    }
+
+    [Fact]
+    public async Task Redelivered_failure_for_an_old_attempt_does_not_use_up_a_retry()
+    {
+        var f = new Fixture();
+        var sagaId = await f.StartBan();
+
+        await f.ChannelRemovalFailed(sagaId, attempt: 1);
+        await f.ChannelRemovalFailed(sagaId, attempt: 1);
+
+        var state = await f.State(sagaId);
+        Assert.Equal(2, state.ChannelAttempts);
+        Assert.Equal(2, f.Client.Count<RemoveUserFromChannelsCommand>());
+        Assert.Single(f.Delays);
+        Assert.Equal(2, f.Client.Published.OfType<RemoveUserFromChannelsCommand>().Last().Attempt);
+    }
+
+    [Fact]
+    public async Task Redelivered_stream_failure_for_an_old_attempt_is_ignored()
+    {
+        var f = new Fixture();
+        var sagaId = await f.StartBan();
+        await f.ChannelsRemoved(sagaId);
+
+        await f.StreamTerminationFailed(sagaId, attempt: 1);
+        await f.StreamTerminationFailed(sagaId, attempt: 1);
+
+        Assert.Equal(2, (await f.State(sagaId)).StreamAttempts);
+        Assert.Equal(2, f.Client.Count<TerminateUserStreamsCommand>());
+    }
+
+    [Fact]
+    public async Task Restoring_memberships_is_recorded_in_the_ban_saga()
+    {
+        var f = new Fixture();
+        var sagaId = await f.StartBan();
+        await f.ChannelsRemoved(sagaId);
+        await f.StreamsTerminated(sagaId);
+
+        await f.Orchestrator.Handle(
+            new ChannelMembershipRestoredEvent { SagaId = sagaId, UserId = f.ProfileId }, CancellationToken.None);
+
+        var state = await f.State(sagaId);
+        Assert.True(state.MembershipRestored);
+        Assert.False(state.NeedsOperator);
+    }
+
+    [Fact]
+    public async Task Failed_restore_of_memberships_needs_an_operator_and_is_not_retried()
+    {
+        var f = new Fixture();
+        var sagaId = await f.StartBan();
+        await f.ChannelsRemoved(sagaId);
+        await f.StreamsTerminated(sagaId);
+        f.Client.Published.Clear();
+
+        await f.Orchestrator.Handle(
+            new ChannelMembershipRestoreFailedEvent { SagaId = sagaId, UserId = f.ProfileId, Reason = "down" },
+            CancellationToken.None);
+
+        var state = await f.State(sagaId);
+        Assert.True(state.MembershipRestoreFailed);
+        Assert.False(state.MembershipRestored);
+        Assert.True(state.NeedsOperator);
+        Assert.Empty(f.Client.Published);
+        Assert.Empty(f.Delays);
     }
 
     [Fact]
     public async Task Duplicate_unban_does_not_publish_again()
     {
         var f = new Fixture();
-        await f.StartBan();
+        var banSaga = await f.StartBan();
+        await f.ChannelsRemoved(banSaga);
+        await f.StreamsTerminated(banSaga);
         var unban = new UnbanUserCommand { UserId = f.ProfileId, ModeratorId = Guid.NewGuid() };
 
         await f.Orchestrator.Handle(unban, CancellationToken.None);

@@ -25,7 +25,7 @@ Every route below is enforced twice: by the gateway route and by a policy in `Us
 | `POST /users/me` | `POST /api/user-profiles` | Scope `user-profiles.write`, `X-UserId` equals `sub` |
 | `PUT /users/me` | `PUT /api/user-profiles/{sub}` | Scope `user-profiles.write`, `sub` equals `{id}` |
 | `DELETE /users/me` | `DELETE /api/user-profiles/{sub}` | Scope `user-profiles.write`, `sub` equals `{id}` |
-| not routed | `POST /api/user-profiles/{id}/ban`, `POST /api/user-profiles/{id}/unban`, `GET /api/user-profiles/sagas/{sagaId}` | Role `internal-service`, the token `sub` becomes the moderator id (see `SAGA.md`) |
+| not routed | `POST /api/user-profiles/{id}/ban`, `POST /api/user-profiles/{id}/unban`, `GET /api/user-profiles/sagas/{sagaId}` | Role `internal-service`, the token `sub` becomes the moderator id (see `SAGA-DESIGN.md`) |
 | not routed | `GET /health/live`, `/health/ready` | None |
 
 Notes:
