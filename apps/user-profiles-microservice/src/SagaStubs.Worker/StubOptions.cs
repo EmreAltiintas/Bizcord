@@ -12,7 +12,7 @@ public sealed class StubOptions
     public string Role { get; set; } = string.Empty;
 
     /// <summary>
-    /// Fails the first N attempts per saga id. 0 never fails, a large number such as 99 always fails.
+    /// Fails the first N attempts per saga id and operation. 0 never fails, a large number such as 99 always fails.
     /// </summary>
     public int FailFirstAttempts { get; set; }
 }

@@ -66,6 +66,7 @@ public sealed class BanSagaSubscriptionService : BackgroundService
         await Subscribe<StreamTerminationFailedEvent>("user-service.stream-termination-failed", _orchestrator.Handle, stoppingToken);
         await Subscribe<UnbanUserCommand>("user-service.unban-user", _orchestrator.Handle, stoppingToken);
         await Subscribe<ChannelMembershipRestoredEvent>("user-service.channel-membership-restored", _orchestrator.Handle, stoppingToken);
+        await Subscribe<ChannelMembershipRestoreFailedEvent>("user-service.channel-membership-restore-failed", _orchestrator.Handle, stoppingToken);
 
         IsSubscribed = true;
     }

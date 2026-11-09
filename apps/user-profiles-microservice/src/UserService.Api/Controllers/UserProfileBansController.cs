@@ -28,7 +28,6 @@ public sealed class UserProfileBansController : ControllerBase
     [HttpPost("{id:guid}/ban")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Ban(
         Guid id, [FromBody] BanUserProfileRequest request, CancellationToken cancellationToken)
     {
@@ -39,11 +38,7 @@ public sealed class UserProfileBansController : ControllerBase
 
         var command = new BanUserCommand { UserId = id, ModeratorId = moderatorId, Reason = request.Reason };
 
-        var failure = await TryPublish(command, cancellationToken);
-        if (failure is not null)
-        {
-            return failure;
-        }
+        await _messageClient.PublishAsync(command, cancellationToken);
 
         return AcceptedAtAction(nameof(GetSaga), new { sagaId = command.SagaId }, new { sagaId = command.SagaId });
     }
@@ -51,7 +46,7 @@ public sealed class UserProfileBansController : ControllerBase
     [HttpPost("{id:guid}/unban")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Unban(Guid id, CancellationToken cancellationToken)
     {
         if (!TryGetModeratorId(out var moderatorId))
@@ -59,11 +54,18 @@ public sealed class UserProfileBansController : ControllerBase
             return Problem(detail: "Token has no valid sub claim.", statusCode: StatusCodes.Status400BadRequest);
         }
 
+        if (await _sagaStates.GetLatestByUserId(id) is { IsInProgress: true })
+        {
+            return Problem(
+                detail: "A ban saga for this user is still running.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
         var command = new UnbanUserCommand { UserId = id, ModeratorId = moderatorId };
 
-        var failure = await TryPublish(command, cancellationToken);
+        await _messageClient.PublishAsync(command, cancellationToken);
 
-        return failure ?? Accepted(new { sagaId = command.SagaId });
+        return Accepted(new { sagaId = command.SagaId });
     }
 
     [HttpGet("sagas/{sagaId:guid}")]
@@ -78,20 +80,4 @@ public sealed class UserProfileBansController : ControllerBase
 
     private bool TryGetModeratorId(out Guid moderatorId) =>
         Guid.TryParse(User.FindFirst("sub")?.Value, out moderatorId);
-
-    private async Task<IActionResult?> TryPublish<TMessage>(TMessage message, CancellationToken cancellationToken)
-        where TMessage : class
-    {
-        try
-        {
-            await _messageClient.PublishAsync(message, cancellationToken);
-            return null;
-        }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            return Problem(
-                detail: "The message broker is unavailable. Try again later.",
-                statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
-    }
 }

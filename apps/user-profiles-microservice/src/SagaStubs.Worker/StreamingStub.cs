@@ -27,7 +27,7 @@ public sealed class StreamingStub : StubService
 
     private async Task TerminateUserStreams(TerminateUserStreamsCommand command, CancellationToken cancellationToken)
     {
-        if (_failures.ShouldFail(command.SagaId))
+        if (_failures.ShouldFail(command.SagaId, "terminate"))
         {
             Logger.LogWarning("Simulated failure ending streams for user {UserId} (saga {SagaId})", command.UserId, command.SagaId);
             await MessageClient.PublishAsync(
@@ -35,6 +35,7 @@ public sealed class StreamingStub : StubService
                 {
                     SagaId = command.SagaId,
                     UserId = command.UserId,
+                    Attempt = command.Attempt,
                     Reason = "Simulated streaming service failure."
                 },
                 cancellationToken);

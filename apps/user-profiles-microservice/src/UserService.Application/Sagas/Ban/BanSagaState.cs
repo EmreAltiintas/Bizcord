@@ -32,6 +32,12 @@ public sealed class BanSagaState
 
     public bool StreamsGaveUp { get; set; }
 
+    /// <summary>Set when a moderator unban asked for the channel memberships to be restored and the Channel Service confirmed.</summary>
+    public bool MembershipRestored { get; set; }
+
+    /// <summary>Set when the Channel Service reported that the memberships could not be restored. It is not retried.</summary>
+    public bool MembershipRestoreFailed { get; set; }
+
     public bool IsCompleted { get; set; }
 
     public bool IsFailed { get; set; }
@@ -41,4 +47,7 @@ public sealed class BanSagaState
     public DateTimeOffset StartedAt { get; init; }
 
     public DateTimeOffset? CompletedAt { get; set; }
+
+    /// <summary>True while the saga has neither completed nor failed.</summary>
+    public bool IsInProgress => !IsCompleted && !IsFailed;
 }

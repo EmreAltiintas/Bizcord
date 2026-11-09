@@ -51,7 +51,6 @@ public class BanSagaSubscriptionServiceTests
             new InMemoryUserProfileRepository(),
             new InMemorySagaStateRepository(),
             client,
-            new BanSagaOptions(),
             NullLogger<BanSagaOrchestrator>.Instance);
 
         return new BanSagaSubscriptionService(
@@ -77,7 +76,7 @@ public class BanSagaSubscriptionServiceTests
         await WaitUntil(() => service.IsSubscribed);
 
         Assert.True(service.IsSubscribed);
-        Assert.Equal(7, client.Subscriptions.Count);
+        Assert.Equal(8, client.Subscriptions.Count);
         Assert.Equal(client.Subscriptions.Count, client.Subscriptions.Distinct().Count());
         Assert.All(client.Subscriptions, id => Assert.StartsWith("user-service.", id));
         Assert.Contains("user-service.ban-user", client.Subscriptions);
@@ -94,8 +93,8 @@ public class BanSagaSubscriptionServiceTests
         await WaitUntil(() => service.IsSubscribed);
 
         Assert.True(service.IsSubscribed);
-        Assert.Equal(7, client.Subscriptions.Count);
-        Assert.Equal(10, client.SubscribeCalls);
+        Assert.Equal(8, client.Subscriptions.Count);
+        Assert.Equal(11, client.SubscribeCalls);
         await service.StopAsync(CancellationToken.None);
     }
 }

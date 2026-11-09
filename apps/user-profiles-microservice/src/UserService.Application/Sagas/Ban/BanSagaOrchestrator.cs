@@ -7,42 +7,24 @@ using UserService.Messaging;
 namespace UserService.Application.Sagas.Ban;
 
 /// <summary>
-/// Orchestrates the "user is banned" saga. All saga logic lives here; the other services
-/// only answer commands.
+/// Orchestrates the ban saga. All saga logic is here, the other services only answer commands.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Step 1 marks the profile as banned in this service. It is the point of no return and is
-/// never rolled back when step 2 or 3 fails. Step 2 asks the Channel Service to remove the
-/// user from all channels, step 3 asks the Streaming Service to end the user's active calls.
-/// Both are retried (forward recovery) up to <see cref="BanSagaOptions.MaxStepAttempts"/>
-/// attempts with exponential backoff. If a step is given up, <see cref="BanSagaState.NeedsOperator"/>
-/// is set and the saga moves on.
-/// </para>
-/// <para>
-/// Compensation exists only for a moderator unban: <see cref="UnbanUserCommand"/> removes the
-/// ban and asks the Channel Service to restore the memberships. Calls that were ended in
-/// step 3 cannot be restored.
-/// </para>
-/// <para>
-/// Delivery is at-least-once, so every handler ignores a message whose step is already
-/// registered in the saga state. Each handler has the signature expected by
-/// <see cref="IMessageClient.SubscribeAsync{TMessage}"/> and is used directly there.
-/// </para>
+/// Step 1 bans the user and is never rolled back. Steps 2 (channels) and 3 (calls) are retried
+/// up to three times with backoff. If a step gives up, <see cref="BanSagaState.NeedsOperator"/> is
+/// set and the saga moves on. Only a moderator unban compensates, and it is rejected while the
+/// ban saga is still running. Delivery is at-least-once, so a message for a step that is already
+/// registered in the state is ignored, and so is a failure event for an old attempt.
+/// Each Handle method can be passed directly to <see cref="IMessageClient.SubscribeAsync{TMessage}"/>.
 /// </remarks>
-public sealed class BanSagaOrchestrator :
-    IMessageHandler<BanUserCommand>,
-    IMessageHandler<UserRemovedFromChannelsEvent>,
-    IMessageHandler<ChannelRemovalFailedEvent>,
-    IMessageHandler<UserStreamsTerminatedEvent>,
-    IMessageHandler<StreamTerminationFailedEvent>,
-    IMessageHandler<UnbanUserCommand>,
-    IMessageHandler<ChannelMembershipRestoredEvent>
+public sealed class BanSagaOrchestrator
 {
+    private const int MaxStepAttempts = 3;
+    private static readonly TimeSpan BackoffBaseDelay = TimeSpan.FromSeconds(1);
+
     private readonly IUserProfileRepository _profiles;
     private readonly ISagaStateRepository _states;
     private readonly IMessageClient _messageClient;
-    private readonly BanSagaOptions _options;
     private readonly ILogger<BanSagaOrchestrator> _logger;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
@@ -54,20 +36,17 @@ public sealed class BanSagaOrchestrator :
         IUserProfileRepository profiles,
         ISagaStateRepository states,
         IMessageClient messageClient,
-        BanSagaOptions options,
         ILogger<BanSagaOrchestrator> logger,
         Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         ArgumentNullException.ThrowIfNull(profiles);
         ArgumentNullException.ThrowIfNull(states);
         ArgumentNullException.ThrowIfNull(messageClient);
-        ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
         _profiles = profiles;
         _states = states;
         _messageClient = messageClient;
-        _options = options;
         _logger = logger;
         _delay = delay ?? Task.Delay;
     }
@@ -104,6 +83,12 @@ public sealed class BanSagaOrchestrator :
             return;
         }
 
+        if (profile.IsBanned)
+        {
+            await FailAsync(state, "User is already banned.", cancellationToken);
+            return;
+        }
+
         profile.Ban(message.Reason);
         _profiles.Update(profile);
 
@@ -114,7 +99,13 @@ public sealed class BanSagaOrchestrator :
         await _messageClient.PublishAsync(
             new UserBannedEvent { SagaId = state.SagaId, UserId = state.UserId }, cancellationToken);
         await _messageClient.PublishAsync(
-            new RemoveUserFromChannelsCommand { SagaId = state.SagaId, UserId = state.UserId }, cancellationToken);
+            new RemoveUserFromChannelsCommand
+            {
+                SagaId = state.SagaId,
+                UserId = state.UserId,
+                Attempt = state.ChannelAttempts
+            },
+            cancellationToken);
     }
 
     public async Task Handle(UserRemovedFromChannelsEvent message, CancellationToken cancellationToken)
@@ -141,19 +132,29 @@ public sealed class BanSagaOrchestrator :
             return;
         }
 
-        if (state.ChannelAttempts < _options.MaxStepAttempts)
+        if (IsStaleAttempt(message.Attempt, state.ChannelAttempts, state.SagaId, nameof(ChannelRemovalFailedEvent)))
+        {
+            return;
+        }
+
+        if (state.ChannelAttempts < MaxStepAttempts)
         {
             var wait = BackoffFor(state.ChannelAttempts);
             _logger.LogWarning(
                 "Channel removal failed for saga {SagaId} (attempt {Attempt} of {Max}, reason: {Reason}). Retrying in {Delay}",
-                state.SagaId, state.ChannelAttempts, _options.MaxStepAttempts, message.Reason, wait);
+                state.SagaId, state.ChannelAttempts, MaxStepAttempts, message.Reason, wait);
 
             await _delay(wait, cancellationToken);
 
             state.ChannelAttempts++;
             await _states.Save(state);
             await _messageClient.PublishAsync(
-                new RemoveUserFromChannelsCommand { SagaId = state.SagaId, UserId = state.UserId },
+                new RemoveUserFromChannelsCommand
+                {
+                    SagaId = state.SagaId,
+                    UserId = state.UserId,
+                    Attempt = state.ChannelAttempts
+                },
                 cancellationToken);
             return;
         }
@@ -191,19 +192,29 @@ public sealed class BanSagaOrchestrator :
             return;
         }
 
-        if (state.StreamAttempts < _options.MaxStepAttempts)
+        if (IsStaleAttempt(message.Attempt, state.StreamAttempts, state.SagaId, nameof(StreamTerminationFailedEvent)))
+        {
+            return;
+        }
+
+        if (state.StreamAttempts < MaxStepAttempts)
         {
             var wait = BackoffFor(state.StreamAttempts);
             _logger.LogWarning(
                 "Stream termination failed for saga {SagaId} (attempt {Attempt} of {Max}, reason: {Reason}). Retrying in {Delay}",
-                state.SagaId, state.StreamAttempts, _options.MaxStepAttempts, message.Reason, wait);
+                state.SagaId, state.StreamAttempts, MaxStepAttempts, message.Reason, wait);
 
             await _delay(wait, cancellationToken);
 
             state.StreamAttempts++;
             await _states.Save(state);
             await _messageClient.PublishAsync(
-                new TerminateUserStreamsCommand { SagaId = state.SagaId, UserId = state.UserId },
+                new TerminateUserStreamsCommand
+                {
+                    SagaId = state.SagaId,
+                    UserId = state.UserId,
+                    Attempt = state.StreamAttempts
+                },
                 cancellationToken);
             return;
         }
@@ -234,6 +245,15 @@ public sealed class BanSagaOrchestrator :
             return;
         }
 
+        var banSaga = await _states.GetLatestByUserId(message.UserId);
+        if (banSaga is { IsInProgress: true })
+        {
+            _logger.LogWarning(
+                "Unban {SagaId} rejected: ban saga {BanSagaId} for user {UserId} is still running",
+                message.SagaId, banSaga.SagaId, message.UserId);
+            return;
+        }
+
         profile.Unban();
         _profiles.Update(profile);
 
@@ -241,20 +261,67 @@ public sealed class BanSagaOrchestrator :
             new UserUnbannedEvent { SagaId = message.SagaId, UserId = message.UserId }, cancellationToken);
 
         // Compensation for step 2 only. Calls ended in step 3 cannot be restored, so there
-        // is no matching command for the Streaming Service.
+        // is no matching command for the Streaming Service. The command carries the id of
+        // the ban saga it compensates, so the answer is recorded in that saga's state.
         await _messageClient.PublishAsync(
-            new RestoreChannelMembershipCommand { SagaId = message.SagaId, UserId = message.UserId },
+            new RestoreChannelMembershipCommand
+            {
+                SagaId = banSaga?.SagaId ?? message.SagaId,
+                UserId = message.UserId
+            },
             cancellationToken);
     }
 
-    public Task Handle(ChannelMembershipRestoredEvent message, CancellationToken cancellationToken)
+    public async Task Handle(ChannelMembershipRestoredEvent message, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(message);
 
+        var state = await _states.GetById(message.SagaId);
+        if (state is null)
+        {
+            _logger.LogWarning(
+                "Channel memberships restored for user {UserId}, but saga {SagaId} is unknown",
+                message.UserId, message.SagaId);
+            return;
+        }
+
+        if (state.MembershipRestored || state.MembershipRestoreFailed)
+        {
+            return;
+        }
+
+        state.MembershipRestored = true;
+        await _states.Save(state);
+
         _logger.LogInformation(
             "Channel memberships restored for user {UserId} (saga {SagaId})", message.UserId, message.SagaId);
+    }
 
-        return Task.CompletedTask;
+    public async Task Handle(ChannelMembershipRestoreFailedEvent message, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var state = await _states.GetById(message.SagaId);
+        if (state is null)
+        {
+            _logger.LogError(
+                "Restoring channel memberships failed for user {UserId} (reason: {Reason}), and saga {SagaId} is unknown. Operator action needed",
+                message.UserId, message.Reason, message.SagaId);
+            return;
+        }
+
+        if (state.MembershipRestored || state.MembershipRestoreFailed)
+        {
+            return;
+        }
+
+        state.MembershipRestoreFailed = true;
+        state.NeedsOperator = true;
+        await _states.Save(state);
+
+        _logger.LogError(
+            "Restoring channel memberships failed for user {UserId} (saga {SagaId}, reason: {Reason}). Operator action needed",
+            message.UserId, message.SagaId, message.Reason);
     }
 
     private static bool ChannelStepDecided(BanSagaState state) => state.ChannelsRemoved || state.ChannelsGaveUp;
@@ -262,7 +329,7 @@ public sealed class BanSagaOrchestrator :
     private static bool StreamStepDecided(BanSagaState state) => state.StreamsTerminated || state.StreamsGaveUp;
 
     private TimeSpan BackoffFor(int failedAttempts) =>
-        _options.BackoffBaseDelay * Math.Pow(2, failedAttempts - 1);
+        BackoffBaseDelay * Math.Pow(2, failedAttempts - 1);
 
     private async Task<BanSagaState?> LoadActive(Guid sagaId, string messageName)
     {
@@ -287,7 +354,26 @@ public sealed class BanSagaOrchestrator :
         state.StreamAttempts = 1;
         await _states.Save(state);
         await _messageClient.PublishAsync(
-            new TerminateUserStreamsCommand { SagaId = state.SagaId, UserId = state.UserId }, cancellationToken);
+            new TerminateUserStreamsCommand
+            {
+                SagaId = state.SagaId,
+                UserId = state.UserId,
+                Attempt = state.StreamAttempts
+            },
+            cancellationToken);
+    }
+
+    private bool IsStaleAttempt(int received, int current, Guid sagaId, string messageName)
+    {
+        if (received == current)
+        {
+            return false;
+        }
+
+        _logger.LogInformation(
+            "{MessageType} for attempt {Received} ignored, saga {SagaId} is at attempt {Current}",
+            messageName, received, sagaId, current);
+        return true;
     }
 
     private async Task CompleteAsync(BanSagaState state)

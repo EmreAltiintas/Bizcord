@@ -29,7 +29,7 @@ public sealed class ChannelStub : StubService
 
     private async Task RemoveUserFromChannels(RemoveUserFromChannelsCommand command, CancellationToken cancellationToken)
     {
-        if (_failures.ShouldFail(command.SagaId))
+        if (_failures.ShouldFail(command.SagaId, "remove"))
         {
             Logger.LogWarning("Simulated failure removing user {UserId} from channels (saga {SagaId})", command.UserId, command.SagaId);
             await MessageClient.PublishAsync(
@@ -37,6 +37,7 @@ public sealed class ChannelStub : StubService
                 {
                     SagaId = command.SagaId,
                     UserId = command.UserId,
+                    Attempt = command.Attempt,
                     Reason = "Simulated channel service failure."
                 },
                 cancellationToken);
@@ -51,6 +52,20 @@ public sealed class ChannelStub : StubService
 
     private async Task RestoreChannelMembership(RestoreChannelMembershipCommand command, CancellationToken cancellationToken)
     {
+        if (_failures.ShouldFail(command.SagaId, "restore"))
+        {
+            Logger.LogWarning("Simulated failure restoring memberships for user {UserId} (saga {SagaId})", command.UserId, command.SagaId);
+            await MessageClient.PublishAsync(
+                new ChannelMembershipRestoreFailedEvent
+                {
+                    SagaId = command.SagaId,
+                    UserId = command.UserId,
+                    Reason = "Simulated channel service failure."
+                },
+                cancellationToken);
+            return;
+        }
+
         Logger.LogInformation("Restored channel memberships for user {UserId} (saga {SagaId})", command.UserId, command.SagaId);
         await MessageClient.PublishAsync(
             new ChannelMembershipRestoredEvent { SagaId = command.SagaId, UserId = command.UserId },

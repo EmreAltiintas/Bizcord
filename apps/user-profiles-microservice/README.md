@@ -15,7 +15,7 @@ It communicates in two ways:
 - Presence feature: consumes `MessagePostedEvent`, updates the author's last active timestamp
   and publishes `UserActivityRecordedEvent`.
 
-- Ban saga: a moderator bans a user, and the User Service orchestrates removal from channels and ending of calls in other services. See [SAGA.md](SAGA.md).
+- Ban saga: a moderator bans a user, and the User Service orchestrates removal from channels and ending of calls in other services. See [SAGA-DESIGN.md](SAGA-DESIGN.md).
 
 ## Project layout
 
