@@ -1,5 +1,9 @@
 # Local development — spins up RabbitMQ and UserService.Api for the Bizcord User Service.
 
+# Services log to stdout; Docker stores that in json-file logs and the fluentd sidecar tails them.
+x-logging: &json-file-logging
+  driver: json-file
+
 services:
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -28,7 +32,10 @@ services:
     networks:
       - default
       - bizcord
+    logging: *json-file-logging
     depends_on:
+      fluentd:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 
@@ -45,7 +52,10 @@ services:
       ConnectionStrings__RabbitMq: "host=rabbitmq;username=guest;password=guest"
       Stub__Role: channel
       Stub__FailFirstAttempts: ${CHANNEL_FAIL_FIRST_ATTEMPTS:-0}
+    logging: *json-file-logging
     depends_on:
+      fluentd:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
 
@@ -59,9 +69,28 @@ services:
       ConnectionStrings__RabbitMq: "host=rabbitmq;username=guest;password=guest"
       Stub__Role: streaming
       Stub__FailFirstAttempts: ${STREAMING_FAIL_FIRST_ATTEMPTS:-0}
+    logging: *json-file-logging
     depends_on:
+      fluentd:
+        condition: service_started
       rabbitmq:
         condition: service_healthy
+
+  # Logging sidecar. Tails the json-file logs of all containers and prints them to its own
+  # stdout (see fluentd/fluent.conf). View with: docker compose logs -f fluentd
+  fluentd:
+    image: fluent/fluentd:v1.17-1
+    container_name: bizcord-fluentd
+    user: root  # container log files are only readable by root
+    environment:
+      FLUENTD_CONF: fluent.conf
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
+      - /var/lib/docker/containers:/fluentd/log/containers:ro
+      - fluentd-pos:/fluentd/pos
+
+volumes:
+  fluentd-pos:
 
 networks:
   bizcord:
